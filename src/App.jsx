@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import useAuthStore from './store/authStore';
 import { missingSupabaseEnv, supabaseConfigError } from './lib/supabase';
@@ -61,6 +61,7 @@ function ConfigErrorScreen() {
           <p>1. Copy <code>.env.example</code> to <code>.env</code></p>
           <p>2. Fill in your real Supabase project URL and anon key</p>
           <p>3. Restart the Vite dev server</p>
+          <p>4. On Vercel, add the same values in Project Settings - Environment Variables and redeploy</p>
         </div>
 
         <p className="text-xs text-slate-muted font-mono break-words">
@@ -69,6 +70,40 @@ function ConfigErrorScreen() {
       </div>
     </div>
   );
+}
+
+function getHashParams(hash) {
+  return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+}
+
+function RecoveryRedirector() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const hashParams = getHashParams(location.hash);
+
+    const hasRecoveryTokens = (
+      searchParams.get('type') === 'recovery'
+      || hashParams.get('type') === 'recovery'
+      || searchParams.has('code')
+      || searchParams.has('token_hash')
+      || hashParams.has('access_token')
+      || hashParams.has('refresh_token')
+    );
+
+    if (!hasRecoveryTokens || location.pathname === '/reset-password') {
+      return;
+    }
+
+    searchParams.set('mode', 'update');
+    const nextSearch = searchParams.toString();
+    const nextUrl = `/reset-password${nextSearch ? `?${nextSearch}` : ''}${location.hash || ''}`;
+    navigate(nextUrl, { replace: true });
+  }, [location.hash, location.pathname, location.search, navigate]);
+
+  return null;
 }
 
 export default function App() {
@@ -81,6 +116,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <RecoveryRedirector />
+
       {/* Toast notifications */}
       <Toaster
         position="top-right"

@@ -31,7 +31,14 @@ export default function ResetPassword() {
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const hashParams = useMemo(() => getHashParams(location.hash), [location.hash]);
-  const wantsPasswordUpdate = searchParams.get('mode') === 'update' || hashParams.get('type') === 'recovery';
+  const wantsPasswordUpdate = (
+    searchParams.get('mode') === 'update'
+    || searchParams.get('type') === 'recovery'
+    || hashParams.get('type') === 'recovery'
+    || searchParams.has('code')
+    || searchParams.has('token_hash')
+    || hashParams.has('access_token')
+  );
 
   useEffect(() => {
     let active = true;

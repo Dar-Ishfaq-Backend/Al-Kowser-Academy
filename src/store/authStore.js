@@ -3,8 +3,9 @@ import { supabase, supabaseConfigError } from '../lib/supabase';
 
 function getResetRedirectUrl() {
   const runtimeOrigin = typeof window !== 'undefined' ? window.location.origin?.trim() : '';
+  const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL?.trim();
   const configured = import.meta.env.VITE_APP_URL?.trim();
-  const baseUrl = runtimeOrigin || configured;
+  const baseUrl = runtimeOrigin || publicSiteUrl || configured;
   return baseUrl ? `${baseUrl.replace(/\/$/, '')}/reset-password?mode=update` : undefined;
 }
 
