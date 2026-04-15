@@ -52,6 +52,30 @@ export async function saveWatchedTime(userId, courseId, lessonId, watchedSecs) {
   if (error) console.error('Save watch time error:', error);
 }
 
+export async function markCourseCompleteForUser(userId, course) {
+  if (!userId || !course?.id) throw new Error('Missing user or course');
+
+  const lessons = (course.modules || []).flatMap((module) => module.lessons || []);
+  if (!lessons.length) throw new Error('No lessons found for this course');
+
+  const completedAt = new Date().toISOString();
+  const rows = lessons.map((lesson) => ({
+    user_id: userId,
+    course_id: course.id,
+    lesson_id: lesson.id,
+    completed: true,
+    completed_at: completedAt,
+    watched_secs: Math.max(lesson.duration_sec || 0, 1),
+  }));
+
+  const { error } = await supabase
+    .from('progress')
+    .upsert(rows, { onConflict: 'user_id,lesson_id' });
+
+  if (error) throw error;
+  return rows.length;
+}
+
 export function computeProgress(progressRows, totalLessons) {
   if (!totalLessons) return 0;
   const completed = progressRows.filter(r => r.completed).length;
@@ -134,6 +158,17 @@ export async function fetchUserCertificates(userId) {
 
   if (error) throw error;
   return data || [];
+}
+
+export async function verifyCertificateById(certificateId) {
+  if (!certificateId) throw new Error('Certificate id is required');
+
+  const { data, error } = await supabase.rpc('verify_certificate', {
+    public_certificate_id: certificateId,
+  });
+
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
 }
 
 /* ─────────────────────────────────────────────

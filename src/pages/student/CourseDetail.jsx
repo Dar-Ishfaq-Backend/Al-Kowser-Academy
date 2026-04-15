@@ -18,13 +18,14 @@ import {
   fetchPublishedCourses,
 } from '../../services/courseService';
 import { computeProgress, fetchCourseProgress } from '../../services/progressService';
-import { ytThumbnail } from '../../services/youtubeService';
+import { ytPlaylistUrl, ytThumbnail, ytVideoUrl } from '../../services/youtubeService';
 import { Badge, Button, LoadingSpinner, ProgressBar } from '../../components/ui/index.jsx';
 import {
   buildSeriesCourseById,
   getSeriesConfigById,
   isSeriesCourseId,
 } from '../../utils/courseSeries';
+import CreatorSupportCard from '../../components/course/CreatorSupportCard';
 
 function formatPrice(value) {
   const numeric = Number(value) || 0;
@@ -338,6 +339,10 @@ export default function CourseDetail() {
 
   const allLessons = (course.modules || []).flatMap((module) => module.lessons || []);
   const lessonCount = allLessons.length;
+  const supportUrl = course.playlist_id
+    ? ytPlaylistUrl(course.playlist_id)
+    : (allLessons[0]?.youtube_id ? ytVideoUrl(allLessons[0].youtube_id) : '');
+  const supportLabel = course.playlist_id ? 'Open Original Playlist' : 'Open Original Video';
   const thumbnail = course.thumbnail_url
     || (allLessons[0]?.youtube_id ? ytThumbnail(allLessons[0].youtube_id, 'hqdefault') : null);
 
@@ -497,6 +502,11 @@ export default function CourseDetail() {
           </div>
         </div>
       </section>
+
+      <CreatorSupportCard
+        url={supportUrl}
+        linkLabel={supportLabel}
+      />
 
       <section className="space-y-4">
         <div className="flex items-end justify-between gap-4">

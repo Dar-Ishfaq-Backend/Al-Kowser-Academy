@@ -55,10 +55,22 @@ export async function fetchCourseById(courseId) {
 
   if (error) throw error;
 
+  const cleanDescription = (value) => {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    return /^imported from nur academy/i.test(text) ? '' : text;
+  };
+
   // Sort modules and lessons
   if (data?.modules) {
     data.modules.sort((a, b) => a.order - b.order);
-    data.modules.forEach(m => m.lessons?.sort((a, b) => a.order - b.order));
+    data.modules.forEach((module) => {
+      module.lessons?.sort((a, b) => a.order - b.order);
+      module.lessons = (module.lessons || []).map((lesson) => ({
+        ...lesson,
+        description: cleanDescription(lesson.description),
+      }));
+    });
   }
   return data;
 }

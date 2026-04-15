@@ -21,6 +21,7 @@ const ADMIN_NAV = [
   { to: '/admin/courses/create', label: 'Add Course', icon: PlusCircle },
   { to: '/admin/users',        label: 'Users',        icon: Users },
   { to: '/admin/analytics',    label: 'Analytics',    icon: BarChart3 },
+  { to: '/admin/certificates', label: 'Certificates', icon: Award },
   { to: '/admin/support',      label: 'Support',      icon: LifeBuoy },
 ];
 

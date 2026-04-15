@@ -455,7 +455,7 @@ async function loadPlaylistSource(nurDataDir, fileName) {
       title: item.sourceTitle || `Lesson ${String(index + 1).padStart(2, '0')}`,
       youtubeId: item.youtubeId,
       durationSec: parseDurationToSeconds(item.duration),
-      description: item.sourceTitle ? `Imported from Nur Academy: ${item.sourceTitle}` : 'Imported from Nur Academy playlist data.',
+      description: '',
       thumbnailUrl: item.youtubeId ? `https://i3.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg` : '',
     })),
   };
@@ -470,7 +470,7 @@ async function resolveCourseContent(nurDataDir, spec) {
         title: lesson.title,
         youtubeId: lesson.youtubeId,
         durationSec: parseDurationToSeconds(lesson.duration),
-        description: lesson.description || 'Imported from Nur Academy.',
+        description: lesson.description || '',
         thumbnailUrl: lesson.youtubeId ? `https://i3.ytimg.com/vi/${lesson.youtubeId}/hqdefault.jpg` : '',
       })),
     };

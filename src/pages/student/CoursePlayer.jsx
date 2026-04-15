@@ -27,7 +27,10 @@ import {
   upsertProgressRow,
   computeCertificateEligibility,
 } from '../../services/progressService';
-import { generateCertificatePng, downloadCertificate } from '../../services/certificateService';
+import { generateCertificatePdf, generateCertificatePng, downloadCertificate } from '../../services/certificateService';
+import { fetchCertificateSettings } from '../../services/certificateSettingsService';
+import CreatorSupportCard from '../../components/course/CreatorSupportCard';
+import { ytPlaylistUrl, ytVideoUrl } from '../../services/youtubeService';
 import VideoPlayer from '../../components/course/VideoPlayer';
 import LessonItem from '../../components/course/LessonItem';
 import { ProgressBar, LoadingSpinner, Button } from '../../components/ui/index.jsx';
@@ -36,6 +39,13 @@ const WATCH_STORAGE_PREFIX = 'al-kawser-watch-durations';
 
 function getDurationStorageKey(courseId) {
   return `${WATCH_STORAGE_PREFIX}:${courseId}`;
+}
+
+function sanitizeLessonDescription(description) {
+  const raw = String(description || '').trim();
+  if (!raw) return '';
+  if (/^imported from nur academy/i.test(raw)) return '';
+  return raw;
 }
 
 function loadStoredDurations(courseId) {
@@ -77,6 +87,8 @@ export default function CoursePlayer() {
   const [loading, setLoading] = useState(true);
   const [genCert, setGenCert] = useState(false);
   const [observedDurations, setObservedDurations] = useState({});
+  const [certSettings, setCertSettings] = useState({});
+  const [downloadFormat, setDownloadFormat] = useState('png');
 
   const lastSavedWatchRef = useRef({});
   const certificateIssuedRef = useRef(false);
@@ -90,6 +102,12 @@ export default function CoursePlayer() {
   useEffect(() => {
     if (user) init();
   }, [user, courseId]);
+
+  useEffect(() => {
+    fetchCertificateSettings()
+      .then(setCertSettings)
+      .catch(() => {});
+  }, []);
 
   const init = async () => {
     setLoading(true);
@@ -248,14 +266,24 @@ export default function CoursePlayer() {
 
     try {
       const cert = await issueCertificate(user.id, courseId);
-      const png = await generateCertificatePng({
+      const payload = {
         studentName: profile.name,
         courseName: course.title,
         certificateId: cert.certificate_id,
         completionDate: cert.issued_at,
         category: course.category,
-      });
-      downloadCertificate(png, `AlKawser-${course.title.replace(/\s+/g, '_')}.png`);
+        logoUrl: certSettings.logo_url,
+        sealUrl: certSettings.seal_url,
+        signatureUrl: certSettings.signature_url,
+      };
+
+      if (downloadFormat === 'pdf') {
+        const pdfBlob = await generateCertificatePdf(payload);
+        downloadCertificate(pdfBlob, `AlKawser-${course.title.replace(/\s+/g, '_')}.pdf`);
+      } else {
+        const png = await generateCertificatePng(payload);
+        downloadCertificate(png, `AlKawser-${course.title.replace(/\s+/g, '_')}.png`);
+      }
       toast.success('Certificate downloaded!');
     } catch (err) {
       console.error(err);
@@ -296,6 +324,11 @@ export default function CoursePlayer() {
   );
 
   const currentProgressRow = progressRows.find((row) => row.lesson_id === currentLesson?.id);
+  const currentLessonDescription = sanitizeLessonDescription(currentLesson?.description);
+  const supportUrl = course?.playlist_id
+    ? ytPlaylistUrl(course.playlist_id)
+    : (currentLesson?.youtube_id ? ytVideoUrl(currentLesson.youtube_id) : '');
+  const supportLabel = course?.playlist_id ? 'Open Original Playlist' : 'Open Original Video';
   const currentDuration = Math.max(
     Number(observedDurations[currentLesson?.id] || 0),
     Number(currentLesson?.duration_sec || 0),
@@ -385,14 +418,27 @@ export default function CoursePlayer() {
 
         <div className="p-4 border-t border-navy-border space-y-3">
           {certificateEligibility.canIssueCertificate ? (
-            <Button
-              onClick={handleDownloadCert}
-              loading={genCert}
-              variant="gold"
-              className="w-full text-sm"
-            >
-              <Award size={16} /> Download Certificate
-            </Button>
+            <>
+              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-muted">
+                <span>Download as</span>
+                <select
+                  value={downloadFormat}
+                  onChange={(event) => setDownloadFormat(event.target.value)}
+                  className="input-field !py-1 !text-xs"
+                >
+                  <option value="png">PNG</option>
+                  <option value="pdf">PDF</option>
+                </select>
+              </div>
+              <Button
+                onClick={handleDownloadCert}
+                loading={genCert}
+                variant="gold"
+                className="w-full text-sm"
+              >
+                <Award size={16} /> Download Certificate
+              </Button>
+            </>
           ) : (
             <div className="rounded-2xl border border-gold/20 bg-gold/5 p-3">
               <div className="flex items-start gap-2">
@@ -493,11 +539,16 @@ export default function CoursePlayer() {
             </div>
           </div>
 
-          {currentLesson?.description && (
+          <CreatorSupportCard
+            url={supportUrl}
+            linkLabel={supportLabel}
+          />
+
+          {currentLessonDescription && (
             <div className="glass-card p-4">
               <h4 className="font-semibold text-sm text-cream mb-2">About this lesson</h4>
               <p className="text-xs text-slate-muted leading-relaxed">
-                {currentLesson.description}
+                {currentLessonDescription}
               </p>
             </div>
           )}

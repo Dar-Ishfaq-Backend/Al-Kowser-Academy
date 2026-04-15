@@ -94,6 +94,15 @@ create table if not exists public.certificates (
   unique (user_id, course_id)
 );
 
+create table if not exists public.certificate_settings (
+  id uuid primary key default uuid_generate_v4(),
+  logo_url text,
+  seal_url text,
+  signature_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.lesson_notes (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -297,6 +306,34 @@ as $$
   ), false);
 $$;
 
+create or replace function public.verify_certificate(public_certificate_id text)
+returns table (
+  certificate_id text,
+  issued_at timestamptz,
+  student_name text,
+  course_title text,
+  course_category text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    c.certificate_id,
+    c.issued_at,
+    p.name as student_name,
+    cr.title as course_title,
+    cr.category as course_category
+  from public.certificates c
+  join public.profiles p on p.id = c.user_id
+  join public.courses cr on cr.id = c.course_id
+  where c.certificate_id = public_certificate_id
+  limit 1;
+$$;
+
+grant execute on function public.verify_certificate(text) to anon, authenticated;
+
 create or replace function public.prevent_profile_privilege_escalation()
 returns trigger
 language plpgsql
@@ -388,6 +425,11 @@ create trigger trg_support_tickets_updated
   before update on public.support_tickets
   for each row execute function public.update_updated_at();
 
+drop trigger if exists trg_certificate_settings_updated on public.certificate_settings;
+create trigger trg_certificate_settings_updated
+  before update on public.certificate_settings
+  for each row execute function public.update_updated_at();
+
 drop trigger if exists trg_profiles_guard on public.profiles;
 create trigger trg_profiles_guard
   before update on public.profiles
@@ -427,6 +469,7 @@ alter table public.lessons enable row level security;
 alter table public.enrollments enable row level security;
 alter table public.progress enable row level security;
 alter table public.certificates enable row level security;
+alter table public.certificate_settings enable row level security;
 alter table public.lesson_notes enable row level security;
 alter table public.bookmarks enable row level security;
 alter table public.support_tickets enable row level security;
@@ -632,6 +675,9 @@ create policy "Users can delete own progress"
 
 drop policy if exists "Users can view own certificates" on public.certificates;
 drop policy if exists "Users can insert earned certificates" on public.certificates;
+drop policy if exists "Authenticated users can view certificate settings" on public.certificate_settings;
+drop policy if exists "Admins can insert certificate settings" on public.certificate_settings;
+drop policy if exists "Admins can update certificate settings" on public.certificate_settings;
 
 create policy "Users can view own certificates"
   on public.certificates
@@ -651,6 +697,25 @@ create policy "Users can insert earned certificates"
       and public.has_completed_course(user_id, course_id)
     )
   );
+
+create policy "Authenticated users can view certificate settings"
+  on public.certificate_settings
+  for select
+  to authenticated
+  using (true);
+
+create policy "Admins can insert certificate settings"
+  on public.certificate_settings
+  for insert
+  to authenticated
+  with check (public.is_admin());
+
+create policy "Admins can update certificate settings"
+  on public.certificate_settings
+  for update
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
 
 drop policy if exists "Users can view own notes" on public.lesson_notes;
 drop policy if exists "Users can insert own notes" on public.lesson_notes;
@@ -767,6 +832,7 @@ insert into storage.buckets (id, name, public)
 values
   ('thumbnails', 'thumbnails', true),
   ('certificates', 'certificates', true),
+  ('certificate-assets', 'certificate-assets', true),
   ('avatars', 'avatars', true),
   ('support-attachments', 'support-attachments', false)
 on conflict (id) do update
@@ -778,6 +844,8 @@ drop policy if exists "Admins can update thumbnails" on storage.objects;
 drop policy if exists "Admins can delete thumbnails" on storage.objects;
 drop policy if exists "Public can read certificates" on storage.objects;
 drop policy if exists "Users can manage own certificates" on storage.objects;
+drop policy if exists "Public can read certificate assets" on storage.objects;
+drop policy if exists "Admins can manage certificate assets" on storage.objects;
 drop policy if exists "Public can read avatars" on storage.objects;
 drop policy if exists "Users can manage own avatars" on storage.objects;
 drop policy if exists "Users can view own support attachments" on storage.objects;
@@ -834,6 +902,19 @@ create policy "Users can manage own certificates"
       or (storage.foldername(name))[1] = auth.uid()::text
     )
   );
+
+create policy "Public can read certificate assets"
+  on storage.objects
+  for select
+  to public
+  using (bucket_id = 'certificate-assets');
+
+create policy "Admins can manage certificate assets"
+  on storage.objects
+  for all
+  to authenticated
+  using (bucket_id = 'certificate-assets' and public.is_admin())
+  with check (bucket_id = 'certificate-assets' and public.is_admin());
 
 create policy "Public can read avatars"
   on storage.objects

@@ -114,6 +114,12 @@ export async function fetchPlaylist(playlistId) {
 export const ytThumbnail = (videoId, quality = 'mqdefault') =>
   `https://img.youtube.com/vi/${videoId}/${quality}.jpg`;
 
+export const ytPlaylistUrl = (playlistId) =>
+  playlistId ? `https://www.youtube.com/playlist?list=${playlistId}` : '';
+
+export const ytVideoUrl = (videoId) =>
+  videoId ? `https://www.youtube.com/watch?v=${videoId}` : '';
+
 /* ─── Build embed URL ───────────────────────────── */
 export const ytEmbedUrl = (videoId, opts = {}) => {
   const params = new URLSearchParams({

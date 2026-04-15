@@ -11,6 +11,7 @@ import { LoadingSpinner } from './components/ui/index.jsx';
 import Login    from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import ResetPassword from './pages/auth/ResetPassword';
+import VerifyCertificate from './pages/public/VerifyCertificate';
 
 // Admin
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -18,6 +19,7 @@ import AdminCourses   from './pages/admin/AdminCourses';
 import CreateCourse   from './pages/admin/CreateCourse';
 import AdminUsers     from './pages/admin/AdminUsers';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
+import AdminCertificates from './pages/admin/AdminCertificates';
 
 // Student
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -101,6 +103,7 @@ export default function App() {
         <Route path="/login"    element={<GuestRoute><Login /></GuestRoute>} />
         <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify-certificate/:certificateId" element={<VerifyCertificate />} />
 
         {/* ── Student ── */}
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
@@ -125,6 +128,7 @@ export default function App() {
           <Route path="courses/:id/edit"        element={<CreateCourse />} />
           <Route path="users"                   element={<AdminUsers />} />
           <Route path="analytics"               element={<AdminAnalytics />} />
+          <Route path="certificates"            element={<AdminCertificates />} />
           <Route path="support"                 element={<AdminSupport />} />
         </Route>
 

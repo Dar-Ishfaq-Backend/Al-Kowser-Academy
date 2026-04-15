@@ -3,7 +3,8 @@ import { Award, Download, Calendar, HeartHandshake, IndianRupee, LifeBuoy } from
 import { Link } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import { fetchUserCertificates } from '../../services/progressService';
-import { generateCertificatePng, downloadCertificate } from '../../services/certificateService';
+import { generateCertificatePdf, generateCertificatePng, downloadCertificate } from '../../services/certificateService';
+import { fetchCertificateSettings } from '../../services/certificateSettingsService';
 import { LoadingSpinner, Card } from '../../components/ui/index.jsx';
 import toast from 'react-hot-toast';
 
@@ -26,22 +27,40 @@ export default function Certificates() {
   const [certs, setCerts]          = useState([]);
   const [loading, setLoading]      = useState(true);
   const [downloading, setDownload] = useState('');
+  const [settings, setSettings]    = useState({});
+  const [downloadFormat, setDownloadFormat] = useState('png');
 
   useEffect(() => {
     if (user) fetchUserCertificates(user.id).then(setCerts).finally(() => setLoading(false));
   }, [user]);
 
+  useEffect(() => {
+    fetchCertificateSettings()
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
   const handleDownload = async (cert) => {
     setDownload(cert.id);
     try {
-      const png = await generateCertificatePng({
+      const payload = {
         studentName:   profile?.name || 'Student',
         courseName:    cert.course?.title || 'Islamic Studies',
         certificateId: cert.certificate_id,
         completionDate: cert.issued_at,
         category:      cert.course?.category,
-      });
-      downloadCertificate(png, `AlKawser-Cert-${cert.certificate_id}.png`);
+        logoUrl:       settings.logo_url,
+        sealUrl:       settings.seal_url,
+        signatureUrl:  settings.signature_url,
+      };
+
+      if (downloadFormat === 'pdf') {
+        const pdfBlob = await generateCertificatePdf(payload);
+        downloadCertificate(pdfBlob, `AlKawser-Cert-${cert.certificate_id}.pdf`);
+      } else {
+        const png = await generateCertificatePng(payload);
+        downloadCertificate(png, `AlKawser-Cert-${cert.certificate_id}.png`);
+      }
       toast.success('Certificate downloaded!');
     } catch (err) {
       toast.error('Failed to generate certificate');
@@ -59,6 +78,18 @@ export default function Certificates() {
         <p className="text-slate-muted text-sm mt-1">
           Certificates of completion from your Islamic studies
         </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-xs uppercase tracking-[0.2em] text-slate-muted">Download as</label>
+        <select
+          value={downloadFormat}
+          onChange={(event) => setDownloadFormat(event.target.value)}
+          className="input-field max-w-[160px]"
+        >
+          <option value="png">PNG</option>
+          <option value="pdf">PDF</option>
+        </select>
       </div>
 
       <Card className="overflow-hidden border-gold/20">
