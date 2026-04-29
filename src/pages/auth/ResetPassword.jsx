@@ -134,7 +134,7 @@ export default function ResetPassword() {
     setLoading(true);
     try {
       await updatePassword(password);
-      await signOut();
+      await signOut({ scope: 'local' });
       toast.success('Password updated. Please sign in with your new password.');
       navigate('/login', { replace: true });
     } catch (err) {

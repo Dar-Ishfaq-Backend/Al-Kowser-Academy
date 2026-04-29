@@ -1,11 +1,32 @@
 import { create } from 'zustand';
 import { supabase, supabaseConfigError } from '../lib/supabase';
 
+const DEFAULT_PUBLIC_SITE_URL = 'https://al-kowser-academy.vercel.app';
+
+function isLocalOrigin(url) {
+  if (!url) return false;
+
+  try {
+    const { hostname } = new URL(url);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
+  } catch {
+    return false;
+  }
+}
+
 function getResetRedirectUrl() {
   const runtimeOrigin = typeof window !== 'undefined' ? window.location.origin?.trim() : '';
   const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL?.trim();
   const configured = import.meta.env.VITE_APP_URL?.trim();
-  const baseUrl = runtimeOrigin || publicSiteUrl || configured;
+  const safeRuntimeOrigin = !isLocalOrigin(runtimeOrigin) ? runtimeOrigin : '';
+  const safeConfigured = !isLocalOrigin(configured) ? configured : '';
+  const baseUrl =
+    publicSiteUrl
+    || safeRuntimeOrigin
+    || safeConfigured
+    || DEFAULT_PUBLIC_SITE_URL
+    || configured
+    || runtimeOrigin;
   return baseUrl ? `${baseUrl.replace(/\/$/, '')}/reset-password?mode=update` : undefined;
 }
 
@@ -14,6 +35,14 @@ function requireSupabase() {
     throw new Error(supabaseConfigError);
   }
   return supabase;
+}
+
+function deferProfileSync(get, userId) {
+  window.setTimeout(() => {
+    get().fetchProfile(userId).catch((err) => {
+      console.error('Deferred profile sync error:', err);
+    });
+  }, 0);
 }
 
 const useAuthStore = create((set, get) => ({
@@ -42,10 +71,10 @@ const useAuthStore = create((set, get) => ({
     }
 
     // Listen to auth state changes
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         set({ user: session.user });
-        await get().fetchProfile(session.user.id);
+        deferProfileSync(get, session.user.id);
       } else {
         set({ user: null, profile: null });
       }
@@ -104,9 +133,12 @@ const useAuthStore = create((set, get) => ({
   },
 
   /* ── Sign out ────────────────────────────── */
-  signOut: async () => {
+  signOut: async (options = {}) => {
     const client = requireSupabase();
-    await client.auth.signOut();
+    const { error } = await client.auth.signOut(
+      options.scope ? { scope: options.scope } : undefined,
+    );
+    if (error) throw error;
     set({ user: null, profile: null });
   },
 

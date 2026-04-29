@@ -92,8 +92,14 @@ function RecoveryRedirector() {
       || hashParams.has('access_token')
       || hashParams.has('refresh_token')
     );
+    const hasRecoveryError = (
+      searchParams.get('error') === 'access_denied'
+      || hashParams.get('error') === 'access_denied'
+      || searchParams.get('error_code') === 'otp_expired'
+      || hashParams.get('error_code') === 'otp_expired'
+    );
 
-    if (!hasRecoveryTokens || location.pathname === '/reset-password') {
+    if ((!hasRecoveryTokens && !hasRecoveryError) || location.pathname === '/reset-password') {
       return;
     }
 
