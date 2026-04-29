@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, EyeOff, KeyRound, Lock, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -16,6 +17,41 @@ function clearRecoveryTokensFromUrl() {
   window.history.replaceState({}, document.title, cleanUrl);
 }
 
+function createPasswordProbeClient() {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: 'al-kawser-password-probe',
+    },
+  });
+}
+
+async function isReusingCurrentPassword(email, password) {
+  const probeClient = createPasswordProbeClient();
+  if (!probeClient || !email || !password) return false;
+
+  try {
+    const { data, error } = await probeClient.auth.signInWithPassword({ email, password });
+    if (error || !data?.user) return false;
+    return true;
+  } finally {
+    try {
+      await probeClient.auth.signOut({ scope: 'local' });
+    } catch {
+      // Ignore cleanup failures on the ephemeral password probe client.
+    }
+  }
+}
+
 export default function ResetPassword() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -28,6 +64,8 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [checkingRecovery, setCheckingRecovery] = useState(true);
   const [recoveryReady, setRecoveryReady] = useState(false);
+  const [hasValidatedRecovery, setHasValidatedRecovery] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const hashParams = useMemo(() => getHashParams(location.hash), [location.hash]);
@@ -73,6 +111,10 @@ export default function ResetPassword() {
         const { data: { session } } = await supabase.auth.getSession();
         if (active) {
           setRecoveryReady(Boolean(session?.user));
+          if (session?.user) {
+            setHasValidatedRecovery(true);
+            setRecoveryEmail(session.user.email || '');
+          }
         }
       } catch (err) {
         console.error('Password recovery session error:', err);
@@ -88,6 +130,10 @@ export default function ResetPassword() {
       if (!active) return;
       if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setRecoveryReady(Boolean(session?.user));
+        if (session?.user) {
+          setHasValidatedRecovery(true);
+          setRecoveryEmail(session.user.email || '');
+        }
         setCheckingRecovery(false);
       }
     }).data.subscription;
@@ -133,12 +179,22 @@ export default function ResetPassword() {
 
     setLoading(true);
     try {
+      const nextRecoveryEmail = recoveryEmail || (await supabase?.auth.getUser())?.data?.user?.email || '';
+      if (await isReusingCurrentPassword(nextRecoveryEmail, password)) {
+        toast.error('Please choose a different password from your previous one.');
+        return;
+      }
+
       await updatePassword(password);
       await signOut({ scope: 'local' });
       toast.success('Password updated. Please sign in with your new password.');
       navigate('/login', { replace: true });
     } catch (err) {
-      toast.error(err.message || 'Failed to update password');
+      const message = err?.message?.toLowerCase?.().includes('same')
+        || err?.message?.toLowerCase?.().includes('different')
+        ? 'Please choose a different password from your previous one.'
+        : (err.message || 'Failed to update password');
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -148,8 +204,8 @@ export default function ResetPassword() {
     return <LoadingSpinner fullScreen />;
   }
 
-  const showUpdateForm = wantsPasswordUpdate && recoveryReady;
-  const showRecoveryExpired = wantsPasswordUpdate && !recoveryReady;
+  const showUpdateForm = wantsPasswordUpdate && (recoveryReady || hasValidatedRecovery);
+  const showRecoveryExpired = wantsPasswordUpdate && !showUpdateForm;
 
   return (
     <div className="min-h-screen bg-navy flex items-center justify-center p-4 pattern-overlay">
